@@ -1,0 +1,202 @@
+#!/bin/bash
+
+authorizedKeysRootDir="/etc/ssh/sftpd_authorized_keys"
+authorizedKeysName="authorized_keys"
+userRoot="/data/sftp"
+quotaPath="/dev/mapper/ds-data"
+logFile="/var/log/sftp/loginShell.log"
+sharFileName="myshare.conf"
+defaultQuota="8G"
+
+loginCheck() {
+	userName="$1"
+
+	error=0
+	## Refresh the user's cache data
+	sss_cache -E
+
+	## Determine if it is a valid user
+	id "$userName" &> /dev/null
+	if [ "$?" -ne "0" ]; then
+		echo "`date '+%Y-%m-%d %H:%M:%S'` The system cannot find the user '$userName'." >> $logFile
+		error=1
+	fi
+
+	if [ "$error" -ne "0" ]; then
+		return $error
+	fi
+
+	## If it is a system user with a UID less than 1000, the program exits
+	userUid=$(id -u "$userName")
+	if [ "$userUid" -lt "1000" ]; then
+		echo "`date '+%Y-%m-%d %H:%M:%S'` System user '"$userName"' with UID less than 1000 is not allowed to login." >> "$logFile"
+		error=2
+	fi
+
+	## Check if the user is a domain user, otherwise exit
+	if [ `id "$userName" | grep "domain users" | wc -l` -eq 0 ]; then
+		echo "`date '+%Y-%m-%d %H:%M:%S'` Non-domain user '"$userName"' is not allowed to login." >> "$logFile"
+		error=3
+	fi
+	return $error
+}
+
+userFormat() {
+	userName="$1"
+
+	## Determine if the input username format meets the requirements, otherwise exit
+	formatMark=0
+	echo "$userName" | egrep '.*@.*' &> /dev/null
+	if [ "$?" -eq "0" ]; then
+        	formatMark=1
+	fi
+	echo "$userName" | egrep '.*\\.*' &> /dev/null
+	if [ "$?" -eq "0" ]; then
+        	formatMark=2
+	fi
+	if [ "$formatMark" -eq "0" ]; then
+        	echo "`date '+%Y-%m-%d %H:%M:%S'` The login user '"$userName"' account format does not meet the requirements." >> "$logFile"
+	        return 1
+	fi
+
+	## Convert the input username format to the standard format
+	userName="$(echo $userName | awk '{print tolower($0)}')"
+	if [ "$formatMark" -eq "2" ]; then
+        	userName="$(echo "$userName" | awk -F '\' '{print $2"@"$1}')"
+	fi
+	echo "$userName"
+	return 0
+}
+
+addUserDir() {
+	userName="$1"
+	groupName="$(id "$userName" | awk -F'(' '{print $3}' | awk -F')' '{print $1}')"
+
+	## Create a user directory for the user
+	homeDir="$userRoot/$userName"
+	if [ ! -d "$homeDir" ]; then
+	    mkdir -p "$homeDir"
+	    chown root:root "$homeDir"
+	    chmod -R 755 "$homeDir"
+	    echo "`date '+%Y-%m-%d %H:%M:%S'` The directory '"$homeDir"' for user '"$userName"' has been successfully created." >> "$logFile"
+	fi
+	if [ ! -d "$homeDir/myhome" ]; then
+	    mkdir -p "$homeDir/myhome"
+	    chown "$userName":"$groupName" "$homeDir/myhome"
+	    chmod -R 770 "$homeDir/myhome"
+	    echo "`date '+%Y-%m-%d %H:%M:%S'` The directory '"$homeDir/myhome"' for user '"$userName"' has been successfully created." >> "$logFile"
+	fi
+        return 0
+}
+
+setQuota() {
+        # Function to realize user disk quota
+        userName="$1"
+
+	if [ "`quota -u "$userName" | egrep 'Disk quotas for user .*: none' | wc -l`" -ne '1' ]; then
+		return 0
+	fi
+
+        if [ "$userQuota" == "" ]; then
+                userQuota="$defaultQuota"
+        fi
+
+        num=$(echo "$userQuota" | tr -cd '[0-9].')
+        var=$(echo "$userQuota" | tr -d '[0-9].')
+         case "$var" in
+                [kK]|[kK][bB])
+                        userQuota=`echo "$num"`
+                        ;;
+                [mM]|[mM][bB])
+                        userQuota=`echo "$num * 1024" | bc`
+                        ;;
+                [gG]|[gG][bB])
+                        userQuota=`echo "$num * 1024 * 1024" | bc`
+                        ;;
+                [tT]|[tT][bB])
+                        userQuota=`echo "$num * 1024 * 1024 * 1024" | bc`
+                        ;;
+                *)
+                        echo "invalid!"
+                        exit 1
+                        ;;
+        esac
+        echo setquota -u "$userName" "$userQuota" "$userQuota" 0 0 "$quotaPath"
+	echo "`date '+%Y-%m-%d %H:%M:%S'` The quota for user $userName has been successfully set to $userQuota." >> "$logFile"
+        return 0
+}
+
+addUserCA() {
+	userName="$1"
+	groupName="$(id "$userName" | awk -F'(' '{print $3}' | awk -F')' '{print $1}')"
+	userKeysRootDir="$authorizedKeysRootDir"'/'"$userName"
+	userKeysDir="$userKeysRootDir"'/.ssh'
+	if [ -d "$userKeysDir" ]; then
+		return 0
+	fi
+	mkdir -p "$userKeysDir"
+	chown "$userName":"$groupName" "$userKeysDir"
+	chmod 700 "$userKeysDir"
+	cd "$userKeysDir"
+	ssh-keygen -t rsa -P "" -f "$userName"'_rsa'
+	cat "$userName"'_rsa.pub' > "$authorizedKeysName"
+	chmod 600 "$authorizedKeysName"
+	chown "$userName":"$groupName" "$authorizedKeysName"
+	puttygen -O private "$userName"'_rsa' -o "$userName"'_rsa.ppk'
+	puttygen -O private "$userName"'_rsa' -o "$userName"'_rsa_v2.ppk' --ppk-param version=2
+	echo "`date '+%Y-%m-%d %H:%M:%S'` The public key directory $userKeyDir for user $userName has been successfully created." >> "$logFile"
+        return 0
+}
+
+addShareFile () {
+	userName="$1"
+	groupName="$(id "$userName" | awk -F'(' '{print $3}' | awk -F')' '{print $1}')"
+
+	homeDir="$userRoot/$userName"
+	shareFile="$userRoot/$userName/$sharFileName"
+	if [ -f "$shareFile" ]; then
+		return 0
+	fi
+	cat > "$shareFile" <<-EOF
+	# The current configuration file is used to set up the sharing of your "/myhome" directory with other sftp accounts to allow them to add, delete, modify and query your data.
+	# The configuration file will grant the corresponding permissions according to your current configuration after the user logs in again.
+
+	# PERMISSION MODE:
+	# - "rw" means that other sftp accounts are allowed to read, write and delete the contents of your shared directory.
+	# - "ro" means that other sftp accounts are only allowed to read the contents of your directory and are not allowed to modify or delete them.
+
+	# USE STEPS:
+	# Step1. Download the current example file to your local computer.
+	# Step2. Modify the configuration file according to the example.
+	# Step3. Upload and replace the current configuration.
+	
+	# Example:
+	# cmdschool.org/xxxx rw
+	# cmdschool.com/xxxx ro
+	
+	# NOTE: 
+	# The content after the "#" symbol at the beginning of each line is a comment, so please do not include "#" symbols at the beginning of the configuration.
+	EOF
+	chown "$userName":"$groupName" "$shareFile"
+	chmod 600 "$shareFile"
+	echo "`date '+%Y-%m-%d %H:%M:%S'` The shared configuration file for user $userName has been successfully created." >> $logFile
+}
+
+echo "`date '+%Y-%m-%d %H:%M:%S'` User '$PAM_USER' starts to log in." >> $logFile
+loginCheck $PAM_USER
+if [ "$?" -ne "0" ]; then
+	exit 0
+fi
+
+userName=$(userFormat $PAM_USER)
+if [ "$?" -ne "0" ]; then
+	exit 0
+fi
+
+addUserDir "$userName"
+addUserCA "$userName"
+addShareFile "$userName"
+setQuota "$userName"
+
+echo "`date '+%Y-%m-%d %H:%M:%S'` User '"$PAM_USER"' has completed login." >> "$logFile"
+exit 0
