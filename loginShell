@@ -162,7 +162,7 @@ addUserCA() {
 	chown "$userName":"$groupName" "$authorizedKeysName"
 	puttygen -O private "$userName"'_rsa' -o "$userName"'_rsa.ppk'
 	puttygen -O private "$userName"'_rsa' -o "$userName"'_rsa_v2.ppk' --ppk-param version=2
-	logMsg="addUserCA The public key directory '"$userKeyDir"' for user '"$userName"' has been successfully created."
+	logMsg="addUserCA The public key directory '"$userKeysDir"' for user '"$userName"' has been successfully created."
 	if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
         return 0
 }
