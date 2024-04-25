@@ -202,7 +202,7 @@ addShareFile () {
 	if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 }
 
-logMsg="$0 User '"$PAM_USER"' starts to log in."
+logMsg="$0 User '"$PAM_USER"' starts to login."
 if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 
 loginCheck $PAM_USER
