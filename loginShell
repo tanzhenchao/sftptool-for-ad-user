@@ -198,7 +198,7 @@ addShareFile () {
 	EOF
 	chown "$userName":"$groupName" "$shareFile"
 	chmod 600 "$shareFile"
-	logMsg="addUserCA The shared configuration file for user '"$userName"' has been successfully created."
+	logMsg="addShareFile The shared configuration file for user '"$userName"' has been successfully created."
 	if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 }
 
