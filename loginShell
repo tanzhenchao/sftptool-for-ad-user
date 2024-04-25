@@ -202,7 +202,7 @@ addShareFile () {
 	if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 }
 
-logMsg="$0 User '"$PAM_USER"' starts to login."
+logMsg="loginShell User '"$PAM_USER"' starts to login."
 if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 
 loginCheck $PAM_USER
@@ -220,6 +220,6 @@ addUserCA "$userName"
 addShareFile "$userName"
 setQuota "$userName"
 
-logMsg="$0 User '"$PAM_USER"' has completed login."
+logMsg="loginShell User '"$PAM_USER"' has completed login."
 if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 exit 0
