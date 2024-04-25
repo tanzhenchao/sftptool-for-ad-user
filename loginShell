@@ -7,6 +7,9 @@ quotaPath="/dev/mapper/ds-data"
 logFile="/var/log/sftp/loginShell.log"
 sharFileName="myshare.conf"
 defaultQuota="8G"
+logDisable="false"
+
+nowTime=`date '+%Y-%m-%d %H:%M:%S'`
 
 loginCheck() {
 	userName="$1"
@@ -18,7 +21,8 @@ loginCheck() {
 	## Determine if it is a valid user
 	id "$userName" &> /dev/null
 	if [ "$?" -ne "0" ]; then
-		echo "`date '+%Y-%m-%d %H:%M:%S'` The system cannot find the user '$userName'." >> $logFile
+		logMsg="loginCheck The system cannot find the user '"$userName"'."
+		if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 		error=1
 	fi
 
@@ -29,15 +33,25 @@ loginCheck() {
 	## If it is a system user with a UID less than 1000, the program exits
 	userUid=$(id -u "$userName")
 	if [ "$userUid" -lt "1000" ]; then
-		echo "`date '+%Y-%m-%d %H:%M:%S'` System user '"$userName"' with UID less than 1000 is not allowed to login." >> "$logFile"
+		logMsg="loginCheck System user '"$userName"' with UID less than 1000 is not allowed to login."
+		if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 		error=2
 	fi
 
 	## Check if the user is a domain user, otherwise exit
 	if [ `id "$userName" | grep "domain users" | wc -l` -eq 0 ]; then
-		echo "`date '+%Y-%m-%d %H:%M:%S'` Non-domain user '"$userName"' is not allowed to login." >> "$logFile"
+		logMsg="loginCheck Non-domain user '"$userName"' is not allowed to login."
+		if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 		error=3
 	fi
+
+	getUserName=$(id "$userName" | awk -F '(' '{print $2}' | awk -F ')' '{print $1}')
+	if [ "$(userFormat $userName)" != "$getUserName" ]; then
+		logMsg="loginCheck Non-standard domain user names are not allowed:'"$userName"'."
+		if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
+		error=4
+	fi
+
 	return $error
 }
 
@@ -55,7 +69,8 @@ userFormat() {
         	formatMark=2
 	fi
 	if [ "$formatMark" -eq "0" ]; then
-        	echo "`date '+%Y-%m-%d %H:%M:%S'` The login user '"$userName"' account format does not meet the requirements." >> "$logFile"
+		logMsg="userFormat The login user '"$userName"' account format does not meet the requirements."
+		if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 	        return 1
 	fi
 
@@ -75,16 +90,18 @@ addUserDir() {
 	## Create a user directory for the user
 	homeDir="$userRoot/$userName"
 	if [ ! -d "$homeDir" ]; then
-	    mkdir -p "$homeDir"
-	    chown root:root "$homeDir"
-	    chmod -R 755 "$homeDir"
-	    echo "`date '+%Y-%m-%d %H:%M:%S'` The directory '"$homeDir"' for user '"$userName"' has been successfully created." >> "$logFile"
+		mkdir -p "$homeDir"
+		chown root:root "$homeDir"
+		chmod -R 755 "$homeDir"
+		logMsg="addUserDir The directory '"$homeDir"' for user '"$userName"' has been successfully created."
+		if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 	fi
 	if [ ! -d "$homeDir/myhome" ]; then
-	    mkdir -p "$homeDir/myhome"
-	    chown "$userName":"$groupName" "$homeDir/myhome"
-	    chmod -R 770 "$homeDir/myhome"
-	    echo "`date '+%Y-%m-%d %H:%M:%S'` The directory '"$homeDir/myhome"' for user '"$userName"' has been successfully created." >> "$logFile"
+		mkdir -p "$homeDir/myhome"
+		chown "$userName":"$groupName" "$homeDir/myhome"
+		chmod -R 770 "$homeDir/myhome"
+		logMsg="addUserDir The directory '"$homeDir/myhome"' for user '"$userName"' has been successfully created."
+		if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 	fi
         return 0
 }
@@ -122,7 +139,8 @@ setQuota() {
                         ;;
         esac
         echo setquota -u "$userName" "$userQuota" "$userQuota" 0 0 "$quotaPath"
-	echo "`date '+%Y-%m-%d %H:%M:%S'` The quota for user $userName has been successfully set to $userQuota." >> "$logFile"
+	logMsg="setQuota The quota for user $userName has been successfully set to $userQuota."
+	if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
         return 0
 }
 
@@ -144,7 +162,8 @@ addUserCA() {
 	chown "$userName":"$groupName" "$authorizedKeysName"
 	puttygen -O private "$userName"'_rsa' -o "$userName"'_rsa.ppk'
 	puttygen -O private "$userName"'_rsa' -o "$userName"'_rsa_v2.ppk' --ppk-param version=2
-	echo "`date '+%Y-%m-%d %H:%M:%S'` The public key directory $userKeyDir for user $userName has been successfully created." >> "$logFile"
+	logMsg="addUserCA The public key directory '"$userKeyDir"' for user '"$userName"' has been successfully created."
+	if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
         return 0
 }
 
@@ -171,18 +190,21 @@ addShareFile () {
 	# Step3. Upload and replace the current configuration.
 	
 	# Example:
-	# cmdschool.org/xxxx rw
-	# cmdschool.com/xxxx ro
+	# cmdschool.org\will rw
+	# cmdschool.com\will ro
 	
 	# NOTE: 
 	# The content after the "#" symbol at the beginning of each line is a comment, so please do not include "#" symbols at the beginning of the configuration.
 	EOF
 	chown "$userName":"$groupName" "$shareFile"
 	chmod 600 "$shareFile"
-	echo "`date '+%Y-%m-%d %H:%M:%S'` The shared configuration file for user $userName has been successfully created." >> $logFile
+	logMsg="addUserCA The shared configuration file for user '"$userName"' has been successfully created."
+	if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 }
 
-echo "`date '+%Y-%m-%d %H:%M:%S'` User '$PAM_USER' starts to log in." >> $logFile
+logMsg="$0 User '"$PAM_USER"' starts to log in."
+if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
+
 loginCheck $PAM_USER
 if [ "$?" -ne "0" ]; then
 	exit 0
@@ -198,5 +220,6 @@ addUserCA "$userName"
 addShareFile "$userName"
 setQuota "$userName"
 
-echo "`date '+%Y-%m-%d %H:%M:%S'` User '"$PAM_USER"' has completed login." >> "$logFile"
+logMsg="$0 User '"$PAM_USER"' has completed login."
+if [[ $logDisable == false ]]; then echo "$nowTime"' '"$logMsg" >> "$logFile"; fi
 exit 0
