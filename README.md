@@ -6,11 +6,11 @@
 
 # 工具的使用方法
 dnf install -y putty bc expect bzip2 postfix mailx openldap-clients autofs quota  
-wget https://github.com/tanzhenchao/sftptool-for-ad-user/blob/main/sftptool.sh
-wget https://github.com/tanzhenchao/sftptool-for-ad-user/blob/main/sftptool.conf
-mv sftptool.sh /bin/sftptool
+wget https://github.com/tanzhenchao/sftptool-for-ad-user/blob/main/sftptool.sh  
+wget https://github.com/tanzhenchao/sftptool-for-ad-user/blob/main/sftptool.conf  
+mv sftptool.sh /bin/sftptool  
 chmod +x /bin/sftptool  
-mkdir -p /etc/sftp
-mv sftptool.conf /etc/sftp/sftptool.conf
+mkdir -p /etc/sftp  
+mv sftptool.conf /etc/sftp/sftptool.conf  
 sftptool  
 Usage: /usr/bin/sftptool {user|home|ca|passwd|quota|share|log|ldap|backup}
