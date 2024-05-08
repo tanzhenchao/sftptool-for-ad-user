@@ -122,7 +122,7 @@ addShareFile() {
 
 	# Example:
 	# cmdschool.org\will rw
-	# cmdschool.com\jeff ro
+	# cmdschool.com\will ro
 
 	# NOTE:
 	# The content after the "#" symbol at the beginning of each line is a comment, so please do not include "#" symbols at the beginning of the configuration.
